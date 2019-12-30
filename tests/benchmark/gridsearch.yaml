@@ -1,6 +1,6 @@
 algorithms:
-  GridSearch: {}
-    # NOTE: Add arguments here if necessary
+  GridSearch:
+    n_points: 5
 
 database:
   type: 'EphemeralDB'

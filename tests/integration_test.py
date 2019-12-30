@@ -8,7 +8,7 @@ import pytest
 
 from orion.algo.space import Integer, Real, Space
 import orion.core.cli
-from orion.core.io.experiment_builder import ExperimentBuilder
+from orion.client import create_experiment
 from orion.core.utils.tests import OrionState
 from orion.core.worker.primary_algo import PrimaryAlgo
 
@@ -36,7 +36,7 @@ def clean_db(database):
 def space():
     """Return an optimization space"""
     space = Space()
-    dim1 = Integer('yolo1', 'uniform', -3, 6)
+    dim1 = Real('yolo1', 'uniform', -3, 6)
     space.register(dim1)
     dim2 = Real('yolo2', 'uniform', 0, 1)
     space.register(dim2)
@@ -45,7 +45,7 @@ def space():
 
 
 def test_seeding(space):
-    """Verify that seeding makes sampling deterministic"""
+    """Verify that seeding have no effects"""
     optimizer = PrimaryAlgo(space, 'gridsearch')
 
     optimizer.seed_rng(1)
@@ -53,7 +53,7 @@ def test_seeding(space):
     assert not numpy.allclose(a, optimizer.suggest(1)[0])
 
     optimizer.seed_rng(1)
-    assert numpy.allclose(a, optimizer.suggest(1)[0])
+    assert not numpy.allclose(a, optimizer.suggest(1)[0])
 
 
 def test_set_state(space):
@@ -87,10 +87,12 @@ def test_int(monkeypatch):
 
     with OrionState(experiments=[], trials=[]):
 
-        orion.core.cli.main(["hunt", "--name", "exp", "--max-trials", "5", "--config",
-                             "./benchmark/gridsearch.yaml",
-                             "./benchmark/rosenbrock.py",
-                             "-x~uniform(-5, 5, discrete=True)"])
+        with pytest.raises(TypeError) as exc:
+            orion.core.cli.main(["hunt", "--name", "exp", "--max-trials", "5", "--config",
+                                 "./benchmark/gridsearch.yaml",
+                                 "./benchmark/rosenbrock.py",
+                                 "-x~uniform(-5, 5, discrete=True)"])
+        assert 'Grid search only supports Real' in str(exc.value)
 
 
 def test_categorical(monkeypatch):
@@ -130,8 +132,7 @@ def test_optimizer_actually_optimize(monkeypatch):
                              "-x~uniform(-50, 50)"])
 
         with open("./benchmark/gridsearch.yaml", "r") as f:
-            exp = ExperimentBuilder().build_view_from(
-                {'name': 'exp', 'config': f})
+            exp = create_experiment(name='exp')
 
         objective = exp.stats['best_evaluation']
 

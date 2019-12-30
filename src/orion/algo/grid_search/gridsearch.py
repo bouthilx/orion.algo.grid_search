@@ -1,54 +1,89 @@
 # -*- coding: utf-8 -*-
 """
-:mod:`orion.algo.grid_search.gridsearch -- TODO
-===================================================
+:mod:`orion.algo.grid_search.gridsearch -- Grid Search
+======================================================
 
 .. module:: gridsearch
     :platform: Unix
-    :synopsis: TODO
+    :synopsis: Grid Search Algorithm
 
 TODO: Write long description
 """
+import itertools
+
 import numpy
 
 from orion.algo.base import BaseAlgorithm
+from orion.algo.space import Categorical, Integer
+
+
+def _grid(dim, num):
+
+    if isinstance(dim, Categorical):
+        if len(dim.categories) != num:
+            raise ValueError(
+                f'Categorical dimension {dim.name} must have {num} choices: {dim.categories}')
+        return dim.categories
+    elif isinstance(dim, Integer):
+        raise TypeError('Grid search only supports Real space dimensions for now.')
+    elif dim._prior_name == 'reciprocal':
+        a, b = dim.interval()
+        return _log_grid(a, b, num)
+    elif dim._prior_name == 'uniform':
+        a, b = dim.interval()
+        return _lin_grid(a, b, num)
+    else:
+        raise TypeError(f'Grid Search only supports `loguniform`, `uniform` and `choices`: '
+                         '{dim.get_prior_string}')
+
+def _log_grid(a, b, num):
+    return numpy.exp(numpy.linspace(numpy.log(a), numpy.log(b), num=num))
+
+def _lin_grid(a, b, num):
+    return numpy.linspace(a, b, num=num)
 
 
 class GridSearch(BaseAlgorithm):
-    """TODO: Class docstring"""
+    """Grid Search algorithm
+    
+    Parameters
+    ----------
+    n_points: int or dict
+        Number of points for each dimensions, or dictionary specifying number of points for each
+        dimension independently (name, n_points).
+    """
 
-    def __init__(self, space, seed=None):
-        super(GridSearch, self).__init__(space, seed=seed)
+    def __init__(self, space, n_points=5, seed=None):
+        if not isinstance(n_points, dict):
+            n_points = {name: n_points for name in space.keys()}
+        super(GridSearch, self).__init__(space, n_points=n_points, seed=seed)
+        self.n = 0
+        self.grid = self.build_grid(space, self.n_points)
 
-    def seed_rng(self, seed):
-        """Seed the state of the random number generator.
+    @staticmethod
+    def build_grid(space, n_points):
+        coordinates = []
+        for name, dim in space.items():
+            coordinates.append(list(_grid(dim, n_points[name])))
 
-        :param seed: Integer seed for the random number generator.
-
-        .. note:: This methods does nothing if the algorithm is deterministic.
-        """
-        # TODO: Adapt this to your algo
-        self.rng = numpy.random.RandomState(seed)
+        return list(itertools.product(*coordinates))
 
     @property
     def state_dict(self):
         """Return a state dict that can be used to reset the state of the algorithm."""
-        # TODO: Adapt this to your algo
-        return {'rng_state': self.rng.get_state()}
+        return {'n': self.n}
 
     def set_state(self, state_dict):
         """Reset the state of the algorithm based on the given state_dict
 
         :param state_dict: Dictionary representing state of an algorithm
         """
-        # TODO: Adapt this to your algo
-        self.seed_rng(0)
-        self.rng.set_state(state_dict['rng_state'])
+        self.n = state_dict['n']
 
     def suggest(self, num=1):
         """Suggest a `num`ber of new sets of parameters.
 
-        TODO: document how suggest work for this algo
+        Returns the (i+1)-th point on the grid after `i` calls to suggest().
 
         Parameters
         ----------
@@ -62,68 +97,28 @@ class GridSearch(BaseAlgorithm):
             out if it cannot make a good suggestion at the moment (it may be waiting for other
             trials to complete), in which case it will return None.
 
-        Notes
-        -----
-        New parameters must be compliant with the problem's domain `orion.algo.space.Space`.
-
         """
-        # TODO: Adapt this to your algo
-        return self.space.sample(num, seed=tuple(self.rng.randint(0, 1000000, size=3)))
+        points = self.grid[self.n:self.n + num]
+        self.n += len(points)
+        return points
 
     def observe(self, points, results):
         """Observe evaluation `results` corresponding to list of `points` in
         space.
 
-        TODO: document how observe work for this algo
-
-        Parameters
-        ----------
-        points : list of tuples of array-likes
-           Points from a `orion.algo.space.Space`.
-           Evaluated problem parameters by a consumer.
-        results : list of dicts
-           Contains the result of an evaluation; partial information about the
-           black-box function at each point in `params`.
-
-        Result
-        ------
-        objective : numeric
-           Evaluation of this problem's objective function.
-        gradient : 1D array-like, optional
-           Contains values of the derivatives of the `objective` function
-           with respect to `params`.
-        constraint : list of numeric, optional
-           List of constraints expression evaluation which must be greater
-           or equal to zero by the problem's definition.
-
+        Grid search is dumb, it does not observe.
         """
-        # TODO: Adapt this to your algo
         pass
 
     @property
     def is_done(self):
-        """Return True, if an algorithm holds that there can be no further improvement."""
-        # NOTE: Drop if not used by algorithm
-        pass
+        """Return True when all grid has been covered."""
+        return self.n >= len(self.grid)
 
-    def score(self, point):
-        """Allow algorithm to evaluate `point` based on a prediction about
-        this parameter set's performance.
-        """
-        # NOTE: Drop if not used by algorithm
-        pass
 
-    def judge(self, point, measurements):
-        """Inform an algorithm about online `measurements` of a running trial."""
-        # NOTE: Drop if not used by algorithm
-        pass
+class NoisyGridSearch(GridSearch):
 
-    @property
-    def should_suspend(self):
-        """Allow algorithm to decide whether a particular running trial is still
-        worth to complete its evaluation, based on information provided by the
-        `judge` method.
-
-        """
-        # NOTE: Drop if not used by algorithm
-        pass
+    def __init__(self, space, n_points, seed=None):
+        super(NoisyGridSearch, self).__init__(space, n_points=n_points, seed=seed)
+        self.n = 0
+        # Sample from here, there we're done, rest in the same.

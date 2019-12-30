@@ -51,10 +51,13 @@ Requirements
 Installation
 ------------
 
-You can install "orion.algo.grid_search" via `pip`_ from `PyPI`_::
+For now, this requires the branch `inclusive` of Oríon::
+
+    $ pip install git+https://github.com/bouthilx/orion.git@inclusive
+
+You can then install "orion.algo.grid_search" via `pip`_ from `PyPI`_::
 
     $ pip install git+https://github.com/bouthilx/orion.algo.grid_search.git
-
 
 Usage
 -----
