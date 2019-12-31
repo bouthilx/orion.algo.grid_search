@@ -45,10 +45,10 @@ def _log_grid(a, b, num, nudge):
 def _lin_grid(a, b, num, nudge):
     delta = (b - a) / (num - 1)
     if nudge is None:
-        nudge = 0
+        nudge = [0, 0]
     return numpy.linspace(
-        a + delta * nudge,
-        b + delta * nudge,
+        a + delta * nudge[0],
+        b - delta * nudge[1],
         num=num)
 
 
@@ -71,9 +71,11 @@ class GridSearch(BaseAlgorithm):
 
     @staticmethod
     def build_grid(space, n_points, nudge=None):
+        if nudge is None:
+            nudge = {}
         coordinates = []
         for name, dim in space.items():
-            coordinates.append(list(_grid(dim, n_points[name], nudge)))
+            coordinates.append(list(_grid(dim, n_points[name], nudge.get(name))))
 
         return list(itertools.product(*coordinates))
 
@@ -130,6 +132,7 @@ class NoisyGridSearch(GridSearch):
     def __init__(self, space, n_points=5, seed=None):
         super(NoisyGridSearch, self).__init__(space, n_points=n_points, seed=seed)
         self.n = 0
-        nudge = numpy.random.RandomState(seed).random() - 0.5  # To have it in (-0.5, 0.5)
+        nudge = numpy.random.RandomState(seed).random(size=(len(space), 2))
+        nudge = dict((key, nudge[i]) for i, key in enumerate(space.keys()))
         self.grid = self.build_grid(space, self.n_points, nudge=nudge)
         # NOTE: We could replace the nudge by a normal distribution instead.
