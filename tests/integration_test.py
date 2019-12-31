@@ -13,6 +13,9 @@ from orion.core.utils.tests import OrionState
 from orion.core.worker.primary_algo import PrimaryAlgo
 
 
+algos = ['gridsearch', 'noisygridsearch']
+
+
 @pytest.fixture(scope='session')
 def database():
     """Return Mongo database object to test with example entries."""
@@ -44,9 +47,10 @@ def space():
     return space
 
 
-def test_seeding(space):
-    """Verify that seeding have no effects"""
-    optimizer = PrimaryAlgo(space, 'gridsearch')
+@pytest.mark.parametrize('algo', algos)
+def test_seeding(space, algo):
+    """Verify that seeding after init have no effects"""
+    optimizer = PrimaryAlgo(space, algo)
 
     optimizer.seed_rng(1)
     a = optimizer.suggest(1)[0]
@@ -56,9 +60,23 @@ def test_seeding(space):
     assert not numpy.allclose(a, optimizer.suggest(1)[0])
 
 
-def test_set_state(space):
+def test_seeding_noisy_grid_search(space):
+    """Verify that seeding have effect at init"""
+    optimizer = PrimaryAlgo(space, {'noisygridsearch': {'seed': 1}})
+    a = optimizer.suggest(1)[0]
+    assert not numpy.allclose(a, optimizer.suggest(1)[0])
+
+    optimizer = PrimaryAlgo(space, {'noisygridsearch': {'seed': 1}})
+    assert numpy.allclose(a, optimizer.suggest(1)[0])
+
+    optimizer = PrimaryAlgo(space, {'noisygridsearch': {'seed': 2}})
+    assert not numpy.allclose(a, optimizer.suggest(1)[0])
+
+
+@pytest.mark.parametrize('algo', algos)
+def test_set_state(space, algo):
     """Verify that resetting state makes sampling deterministic"""
-    optimizer = PrimaryAlgo(space, 'gridsearch')
+    optimizer = PrimaryAlgo(space, algo)
 
     optimizer.seed_rng(1)
     state = optimizer.state_dict
@@ -69,19 +87,21 @@ def test_set_state(space):
     assert numpy.allclose(a, optimizer.suggest(1)[0])
 
 
-def test_optimizer(monkeypatch):
+@pytest.mark.parametrize('algo', algos)
+def test_optimizer(monkeypatch, algo):
     """Check functionality of BayesianOptimizer wrapper for single shaped dimension."""
     monkeypatch.chdir(os.path.dirname(os.path.abspath(__file__)))
 
     with OrionState(experiments=[], trials=[]):
 
         orion.core.cli.main(["hunt", "--name", "exp", "--max-trials", "5", "--config",
-                             "./benchmark/gridsearch.yaml",
+                             "./benchmark/{algo}.yaml".format(algo=algo),
                              "./benchmark/rosenbrock.py",
                              "-x~uniform(-5, 5)"])
 
 
-def test_int(monkeypatch):
+@pytest.mark.parametrize('algo', algos)
+def test_int(monkeypatch, algo):
     """Check support of integer values."""
     monkeypatch.chdir(os.path.dirname(os.path.abspath(__file__)))
 
@@ -89,7 +109,7 @@ def test_int(monkeypatch):
 
         with pytest.raises(TypeError) as exc:
             orion.core.cli.main(["hunt", "--name", "exp", "--max-trials", "5", "--config",
-                                 "./benchmark/gridsearch.yaml",
+                                 "./benchmark/{algo}.yaml".format(algo=algo),
                                  "./benchmark/rosenbrock.py",
                                  "-x~uniform(-5, 5, discrete=True)"])
         assert 'Grid search only supports Real' in str(exc.value)
@@ -107,19 +127,36 @@ def test_categorical(monkeypatch):
                              "-x~choices([-5, -2, 0, 2, 5])"])
 
 
-def test_optimizer_two_inputs(monkeypatch):
+def test_categorical_noisy_gridsearch(monkeypatch):
+    """Check no support of categorical values."""
+    monkeypatch.chdir(os.path.dirname(os.path.abspath(__file__)))
+
+    with OrionState(experiments=[], trials=[]):
+
+        with pytest.raises(ValueError) as exc:
+            orion.core.cli.main(["hunt", "--name", "exp", "--max-trials", "5", "--config",
+                                 "./benchmark/noisygridsearch.yaml",
+                                 "./benchmark/rosenbrock.py",
+                                 "-x~choices([-5, -2, 0, 2, 5])"])
+
+        assert 'Categorical dimension not supported with NoisyGridSearch' in str(exc.value)
+
+
+@pytest.mark.parametrize('algo', algos)
+def test_optimizer_two_inputs(monkeypatch, algo):
     """Check functionality of BayesianOptimizer wrapper for 2 dimensions."""
     monkeypatch.chdir(os.path.dirname(os.path.abspath(__file__)))
 
     with OrionState(experiments=[], trials=[]):
 
         orion.core.cli.main(["hunt", "--name", "exp", "--max-trials", "5", "--config",
-                             "./benchmark/gridsearch.yaml",
+                             "./benchmark/{algo}.yaml".format(algo=algo),
                              "./benchmark/rosenbrock.py",
                              "-x~uniform(-5, 5)", "-y~uniform(-10, 10)"])
 
 
-def test_optimizer_actually_optimize(monkeypatch):
+@pytest.mark.parametrize('algo', algos)
+def test_optimizer_actually_optimize(monkeypatch, algo):
     """Check if Bayesian Optimizer has better optimization than random search."""
     monkeypatch.chdir(os.path.dirname(os.path.abspath(__file__)))
     best_random_search = 23.403275057472825
@@ -127,11 +164,11 @@ def test_optimizer_actually_optimize(monkeypatch):
     with OrionState(experiments=[], trials=[]):
 
         orion.core.cli.main(["hunt", "--name", "exp", "--max-trials", "20", "--config",
-                             "./benchmark/gridsearch.yaml",
+                             "./benchmark/{algo}.yaml".format(algo=algo),
                              "./benchmark/rosenbrock.py",
                              "-x~uniform(-50, 50)"])
 
-        with open("./benchmark/gridsearch.yaml", "r") as f:
+        with open("./benchmark/{algo}.yaml".format(algo=algo), "r") as f:
             exp = create_experiment(name='exp')
 
         objective = exp.stats['best_evaluation']
