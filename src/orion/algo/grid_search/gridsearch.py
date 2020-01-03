@@ -132,7 +132,7 @@ class NoisyGridSearch(GridSearch):
     def __init__(self, space, n_points=5, seed=None):
         super(NoisyGridSearch, self).__init__(space, n_points=n_points, seed=seed)
         self.n = 0
-        nudge = numpy.random.RandomState(seed).random(size=(len(space), 2))
+        nudge = numpy.random.RandomState(seed).uniform(0, 1, size=(len(space), 2))
         nudge = dict((key, nudge[i]) for i, key in enumerate(space.keys()))
         self.grid = self.build_grid(space, self.n_points, nudge=nudge)
         # NOTE: We could replace the nudge by a normal distribution instead.
