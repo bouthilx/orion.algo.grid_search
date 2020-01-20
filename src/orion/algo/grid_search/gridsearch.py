@@ -17,7 +17,7 @@ from orion.algo.base import BaseAlgorithm
 from orion.algo.space import Categorical, Integer
 
 
-def _grid(dim, num, nudge=None):
+def _grid(dim, num, delta, nudge=None):
 
     if isinstance(dim, Categorical):
         if len(dim.categories) != num:
@@ -31,24 +31,25 @@ def _grid(dim, num, nudge=None):
         raise TypeError('Grid search only supports Real space dimensions for now.')
     elif dim._prior_name == 'reciprocal':
         a, b = dim.interval()
-        return _log_grid(a, b, num, nudge)
+        return _log_grid(a, b, num, delta, nudge)
     elif dim._prior_name == 'uniform':
         a, b = dim.interval()
-        return _lin_grid(a, b, num, nudge)
+        return _lin_grid(a, b, num, delta, nudge)
     else:
         raise TypeError(f'Grid Search only supports `loguniform`, `uniform` and `choices`: '
                          '{dim.get_prior_string}')
 
-def _log_grid(a, b, num, nudge):
-    return numpy.exp(_lin_grid(numpy.log(a), numpy.log(b), num, nudge))
+def _log_grid(a, b, num, delta, nudge):
+    return numpy.exp(_lin_grid(numpy.log(a), numpy.log(b), num, delta, nudge))
 
-def _lin_grid(a, b, num, nudge):
-    delta = (b - a) / (num - 1)
+def _lin_grid(a, b, num, delta, nudge):
+    if delta is None:
+        delta = (b - a) / (num - 1)
     if nudge is None:
         nudge = [0, 0]
     return numpy.linspace(
         a + delta * nudge[0],
-        b - delta * nudge[1],
+        b + delta * nudge[1],
         num=num)
 
 
@@ -70,12 +71,14 @@ class GridSearch(BaseAlgorithm):
         self.grid = self.build_grid(space, self.n_points)
 
     @staticmethod
-    def build_grid(space, n_points, nudge=None):
+    def build_grid(space, n_points, deltas=None, nudge=None):
+        if deltas is None:
+            deltas = {}
         if nudge is None:
             nudge = {}
         coordinates = []
         for name, dim in space.items():
-            coordinates.append(list(_grid(dim, n_points[name], nudge.get(name))))
+            coordinates.append(list(_grid(dim, n_points[name], deltas.get(name), nudge.get(name))))
 
         return list(itertools.product(*coordinates))
 
@@ -129,10 +132,8 @@ class GridSearch(BaseAlgorithm):
 
 class NoisyGridSearch(GridSearch):
 
-    def __init__(self, space, n_points=5, seed=None):
+    def __init__(self, space, n_points=5, deltas=None, seed=None):
         super(NoisyGridSearch, self).__init__(space, n_points=n_points, seed=seed)
-        self.n = 0
-        nudge = numpy.random.RandomState(seed).uniform(0, 1, size=(len(space), 2))
+        nudge = numpy.random.RandomState(seed).uniform(0, 1, size=(len(space), 2)) - 0.5
         nudge = dict((key, nudge[i]) for i, key in enumerate(space.keys()))
-        self.grid = self.build_grid(space, self.n_points, nudge=nudge)
-        # NOTE: We could replace the nudge by a normal distribution instead.
+        self.grid = self.build_grid(space, self.n_points, deltas=deltas, nudge=nudge)

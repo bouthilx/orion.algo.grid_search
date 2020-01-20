@@ -41,7 +41,7 @@ def space():
     space = Space()
     dim1 = Real('yolo1', 'uniform', -3, 6)
     space.register(dim1)
-    dim2 = Real('yolo2', 'uniform', 0, 1)
+    dim2 = Real('yolo2', 'reciprocal', 1, 10)
     space.register(dim2)
 
     return space
@@ -63,6 +63,7 @@ def test_seeding(space, algo):
 def test_seeding_noisy_grid_search(space):
     """Verify that seeding have effect at init"""
     optimizer = PrimaryAlgo(space, {'noisygridsearch': {'seed': 1}})
+
     a = optimizer.suggest(1)[0]
     assert not numpy.allclose(a, optimizer.suggest(1)[0])
 
@@ -85,6 +86,28 @@ def test_set_state(space, algo):
 
     optimizer.set_state(state)
     assert numpy.allclose(a, optimizer.suggest(1)[0])
+
+
+def test_deltas_noisy_grid_search(monkeypatch, space):
+    """Verify that deltas are applied properly"""
+    deltas = {'yolo1': 3, 'yolo2': 1}
+    class Dummy():
+        def __init__(self, seed):
+            pass
+        def uniform(self, a, b, size):
+            return numpy.ones(size)
+    monkeypatch.setattr('numpy.random.RandomState', Dummy)
+    config = {'seed': 3, 'deltas': deltas, 'n_points': 2}
+    optimizer = PrimaryAlgo(space, {'noisygridsearch': config})
+    a = optimizer.suggest(4)
+    assert a[0][0] == -3 + deltas['yolo1'] / 2
+    assert a[0][1] == numpy.exp(numpy.log(1) + deltas['yolo2'] / 2)
+    assert a[1][0] == -3 + deltas['yolo1'] / 2
+    assert a[1][1] == numpy.exp(numpy.log(10) + deltas['yolo2'] / 2)
+    assert a[2][0] == 3 + deltas['yolo1'] / 2
+    assert a[2][1] == numpy.exp(numpy.log(1) + deltas['yolo2'] / 2)
+    assert a[3][0] == 3 + deltas['yolo1'] / 2
+    assert a[3][1] == numpy.exp(numpy.log(10) + deltas['yolo2'] / 2)
 
 
 @pytest.mark.parametrize('algo', algos)
