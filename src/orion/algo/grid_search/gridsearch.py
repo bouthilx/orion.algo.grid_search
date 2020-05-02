@@ -63,12 +63,17 @@ class GridSearch(BaseAlgorithm):
         dimension independently (name, n_points).
     """
 
-    def __init__(self, space, n_points=5, seed=None):
+    def __init__(self, space, n_points=5, seed=None, nudge=None):
         if not isinstance(n_points, dict):
             n_points = {name: n_points for name in space.keys()}
         super(GridSearch, self).__init__(space, n_points=n_points, seed=seed)
         self.n = 0
-        self.grid = self.build_grid(space, self.n_points)
+        if nudge is not None:
+            nudges = numpy.zeros((len(space), 2))
+            nudges[:, 0] = nudge
+            nudges[:, 1] = -nudge
+            nudge = dict((key, nudges[i]) for i, key in enumerate(space.keys()))
+        self.grid = self.build_grid(space, self.n_points, nudge=nudge)
 
     @staticmethod
     def build_grid(space, n_points, deltas=None, nudge=None):
@@ -135,5 +140,7 @@ class NoisyGridSearch(GridSearch):
     def __init__(self, space, n_points=5, deltas=None, seed=None):
         super(NoisyGridSearch, self).__init__(space, n_points=n_points, seed=seed)
         nudge = numpy.random.RandomState(seed).uniform(0, 1, size=(len(space), 2)) - 0.5
+        nudge[:, 0] += 0.5
+        nudge[:, 1] -= 0.5
         nudge = dict((key, nudge[i]) for i, key in enumerate(space.keys()))
         self.grid = self.build_grid(space, self.n_points, deltas=deltas, nudge=nudge)
