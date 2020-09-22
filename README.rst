@@ -62,7 +62,55 @@ You can then install "orion.algo.grid_search" via `pip`_ from `PyPI`_::
 Usage
 -----
 
-* TODO
+To use the Grid Search algorithm you need to create a configuration file for Oríon. For example:
+
+.. code-block:: yaml
+
+    experiment:
+      name: 'grid_search_demo'
+      algorithms:
+        gridsearch:
+          n_points: 5
+
+    database: 
+      type: 'pickleddb'
+      host: 'db.pkl'
+
+You can then call `orion` in commandline and pass the configuration file to use the algo.
+
+orion hunt --config grid.yaml ./tests/functional/demo/black_box.py -x~'uniform(-50, 50)'
+
+The file `./tests/functional/demo/black_box.py` can be found in source code of Oríon here: https://github.com/Epistimio/orion/blob/develop/tests/functional/demo/black_box.py.
+
+You can also use it with the Python API
+
+.. code-block:: python
+
+    from orion.client import create_experiment
+
+
+    def function(x):
+        """Evaluate partial information of a quadratic."""
+        z = x - 34.56789
+        return [{'name': 'objective', 'type': 'objective', 'value': 4 * z**2 + 23.4}]
+
+
+    experiment = create_experiment(
+        name='grid_search_pyapi_demo',
+        space={'x': 'uniform(-50, 50)'},
+        algorithms={'gridsearch': {'n_points': 5}},
+        storage={
+            'database': {
+                'type': 'pickleddb',
+                'host': 'db.pkl'
+            }
+        })
+
+    experiment.workon(function)
+
+    print(experiment.stats)
+    
+See Oríon's documentation for more information on the python API: https://orion.readthedocs.io/en/stable/user/api.html#python-apis.
 
 Contributing
 ------------
