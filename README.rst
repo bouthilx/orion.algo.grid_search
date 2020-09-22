@@ -51,7 +51,7 @@ Requirements
 Installation
 ------------
 
-Install latest version of Oríon
+Install latest version of Oríon::
 
     $ pip install orion
 
